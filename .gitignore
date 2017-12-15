@@ -1,0 +1,17 @@
+angular.min.js
+*.pyc
+logs/*
+!.gitkeep
+node_modules/
+tmp
+.idea
+.DS_Store
+package-lock.json
+bower_components/
+app/amazon-connect-*
+app/angular.js
+app/bootstrap.css
+app/bootstrap.css.map
+env/
+__pycache__
+config.json
