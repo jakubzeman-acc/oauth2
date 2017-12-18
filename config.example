@@ -1,4 +1,7 @@
 {
+  "app_name": "jz-oauth2",
+  "base_url": "http://localhost:5000",
+  "dynamic_registration": false,
   "client_id": "my_username",
   "client_secret": "my_password",
   "discovery_url": "https://mojeid.cz/.well-known/openid-configuration/"

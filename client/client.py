@@ -7,6 +7,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from urllib.error import URLError
 from client.config import Config
+from typing import Union
 
 
 def generate_random_string():
@@ -38,6 +39,13 @@ class Client:
         else:
             print("No discovery url configured, all endpoints needs to be configured manually")
 
+        if self.config.dynamic_registration_enabled() and 0 == len(self.config.get_registration_endpoint()):
+            raise Exception('registration_endpoint must be set in case of dynamic registration.')
+        elif self.config.dynamic_registration_enabled() and 0 == len(self.config.get_base_url()):
+            raise Exception('base_url must be set in case of dynamic registration.')
+        elif self.config.dynamic_registration_enabled():
+            self.__dynamic_registration()
+
         # Mandatory settings
         if 0 == len(self.config.get_authorization_endpoint()):
             raise Exception('authorization_endpoint not set.')
@@ -49,6 +57,33 @@ class Client:
             raise Exception('client_secret not set.')
         if 0 == len(self.config.get_redirect_uri()):
             raise Exception('redirect_uri not set.')
+
+    def __dynamic_registration(self):
+        post_data = json.dumps({
+            "application_type": "web",
+            "redirect_uris": [self.config.get_base_url() + "/callback"],
+            "client_name": self.config.get_app_name(),
+            "request_uris": [self.config.get_base_url() + "/request"],
+            "token_endpoint_auth_method": "client_secret_post",
+            "claims": [
+                "name",
+                "email"
+            ]
+        })
+        request_headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json"
+        }
+        request = Request(
+            self.config.get_registration_endpoint(),
+            data=post_data.encode("utf-8"),
+            headers=request_headers
+        )
+        self.config.set_dynamic_configuration(
+            json.loads(
+                urlopen(request, context=self.ctx).read()
+            )
+        )
 
     def revoke(self, token):
         """
@@ -79,7 +114,11 @@ class Client:
             'client_id': self.config.get_client_id(),
             'client_secret': self.config.get_client_secret()
         }
-        token_response = self.urlopen(self.config.get_token_endpoint(), urlencode(data), context=self.ctx)
+        token_response = self.urlopen(
+            self.config.get_token_endpoint(),
+            urlencode(data).encode("utf-8"),
+            context=self.ctx
+        )
         return json.loads(token_response.read())
 
     def get_authn_req_url(self, session, acr, force_auth_n):
@@ -106,11 +145,29 @@ class Client:
 
         # Exchange code for tokens
         try:
-            token_response = self.urlopen(self.config.get_token_endpoint(), urlencode(data), context=self.ctx)
+            token_response = self.urlopen(
+                self.config.get_token_endpoint(),
+                urlencode(data).encode("utf-8"),
+                context=self.ctx
+            )
         except URLError as te:
             print("Could not exchange code for tokens")
             raise te
         return json.loads(token_response.read())
+
+    def get_user_info(self, user_token: str) -> Union[dict, None]:
+        if 0 == len(self.config.get_userinfo_endpoint()):
+            return None
+        request_headers = {
+            "Authorization": "Bearer " + user_token
+        }
+        request = Request(
+            self.config.get_userinfo_endpoint(),
+            headers=request_headers
+        )
+        return json.loads(
+            urlopen(request, context=self.ctx).read()
+        )
 
     @staticmethod
     def urlopen(url, data=None, context=None):

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from flask import Flask, jsonify, redirect, session, request
+from flask import Flask, jsonify, redirect, session, request, render_template
 from client.client import Client, generate_random_string
 from client.config import Config
 from client.validator import JwtValidatorException, JwtValidator
@@ -73,7 +73,7 @@ class UserSession(object):
     id_token = None
     access_token_json = None
     id_token_json = None
-    name = None
+    info = None
     api_response = None
 
 
@@ -99,8 +99,14 @@ def handle_invalid_jwt(error):
 
 @app.route('/', methods=['GET'])
 def index():
-    login_url = _client.get_authn_req_url(session, request.args.get("acr", None), request.args.get("forceAuthN", False))
-    return redirect(login_url)
+    user = None
+    if 'session_id' in session:
+        user = _session_store.get(session['session_id'])
+    if user is None:
+        login_url = _client.get_authn_req_url(session, request.args.get("acr", None), request.args.get("forceAuthN", False))
+        return redirect(login_url)
+    else:
+        return render_template('index.html', username=user.info["name"], provider=_config.get_authorization_endpoint())
 
 
 @app.route('/callback', methods=['GET'])
@@ -113,6 +119,15 @@ def redirect_uri_handler():
 
     try:
         token_data = _client.get_token(request.args['code'])
+        if "error" in token_data:
+            err_response = jsonify({
+                "success": False,
+                "message": token_data["error"],
+                "detail": "" if "error_description" not in token_data else token_data["error_description"],
+                "status_code": 500
+            })
+            err_response.status_code = 500
+            return err_response
     except Exception as e:
         raise BadRequest('Could not fetch token(s): ' + str(e))
     session.pop('state', None)
@@ -140,6 +155,8 @@ def redirect_uri_handler():
 
     if 'refresh_token' in token_data:
         user.refresh_token = token_data['refresh_token']
+
+    user.info = _client.get_user_info(user.access_token)
 
     session['session_id'] = generate_random_string()
     _session_store[session['session_id']] = user
