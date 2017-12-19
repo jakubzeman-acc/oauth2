@@ -1,4 +1,5 @@
 import json
+from time import time
 from ssl import SSLContext
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -29,7 +30,7 @@ class Client:
             raise Exception('registration_endpoint must be set in case of dynamic registration.')
         elif self.config.dynamic_registration_enabled() and 0 == len(self.config.get_base_url()):
             raise Exception('base_url must be set in case of dynamic registration.')
-        elif self.config.dynamic_registration_enabled():
+        elif self.config.dynamic_registration_enabled() and 0 < len(self.config.get_registration_endpoint()):
             self.__dynamic_registration()
 
         # Mandatory settings
@@ -44,22 +45,52 @@ class Client:
         if 0 == len(self.config.get_redirect_uri()):
             raise Exception('redirect_uri not set.')
 
+    @staticmethod
+    def __is_dynamic_registration_valid(cfg) -> bool:
+        if "client_secret_expires_at" not in cfg:
+            return True
+        elif int(time()) < int(cfg["client_secret_expires_at"]):
+            return True
+        else:
+            return False
+
+    def refresh_dynamic_registration(self, cfg):
+        post_data = json.dumps({
+            "client_secret": None
+        })
+        request_headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + cfg["registration_access_token"]
+        }
+        request = Request(
+            cfg["registration_client_uri"],
+            data=post_data.encode("utf-8"),
+            headers=request_headers
+        )
+        self.config.set_dynamic_configuration(
+            json.loads(
+                urlopen(request, context=self.ctx).read()
+            )
+        )
+        self.db.save_dynamic_registration(self.config.get_app_name(), self.config.get_dynamic_configuration())
+
     def __dynamic_registration(self) -> None:
-        db_dynamic_registration = self.db.get_dynamic_registration(self.config.get_app_name())
-        if db_dynamic_registration is not None:
-            self.config.set_dynamic_configuration(db_dynamic_registration)
-            return
+        db_registration = self.db.get_dynamic_registration(self.config.get_app_name())
+        if db_registration is not None:
+            if Client.__is_dynamic_registration_valid(db_registration):
+                self.config.set_dynamic_configuration(db_registration)
+                return
+            elif "registration_client_uri" in db_registration and "registration_access_token" in db_registration:
+                self.refresh_dynamic_registration(db_registration)
+                return
 
         post_data = json.dumps({
             "application_type": "web",
             "redirect_uris": [self.config.get_base_url() + "/callback"],
             "client_name": self.config.get_app_name(),
             "request_uris": [self.config.get_base_url() + "/request"],
-            "token_endpoint_auth_method": "client_secret_post",
-            "claims": [
-                "name",
-                "email"
-            ]
+            "token_endpoint_auth_method": "client_secret_post"
         })
         request_headers = {
             "Accept": "application/json",
