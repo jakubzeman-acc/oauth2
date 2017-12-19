@@ -1,7 +1,7 @@
 import json
 import random
 import string
-from ssl import create_default_context
+from ssl import create_default_context, SSLContext
 from _ssl import CERT_NONE
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -10,11 +10,11 @@ from client.config import Config
 from typing import Union
 
 
-def generate_random_string():
+def generate_random_string() -> str:
     return ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(20))
 
 
-def get_ssl_context(config: Config):
+def get_ssl_context(config: Config) -> SSLContext:
     ctx = create_default_context()
 
     if not config.verify_ssl_server():
@@ -24,12 +24,18 @@ def get_ssl_context(config: Config):
     return ctx
 
 
+def dict_key_to_camel_case(key: str) -> str:
+    if key.startswith("__"):
+        key = key[2:]
+    ret = ''.join(x for x in key.title() if "_" != x)
+    return ret[0].lower() + ret[1:]
+
 class Client:
     def __init__(self, config: Config):
         self.config: Config = config
 
         print('Getting ssl context for oauth server')
-        self.ctx = get_ssl_context(self.config)
+        self.ctx: SSLContext = get_ssl_context(self.config)
         self.__init_config()
 
     def __init_config(self):
@@ -165,6 +171,8 @@ class Client:
             self.config.get_userinfo_endpoint(),
             headers=request_headers
         )
+        print(self.config.get_userinfo_endpoint())
+        print("Authorization: Bearer " + user_token)
         return json.loads(
             urlopen(request, context=self.ctx).read()
         )

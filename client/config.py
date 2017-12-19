@@ -16,28 +16,33 @@ class Config(object):
         self.__base_url: str = ""
         self.__app_name: str = "js-oauth2"
         self.__userinfo_endpoint = ""
-        if os.path.exists('config.json'):
-            with open('config.json') as fp:
-                try:
-                    local_config = json.load(fp)
-                    if "client_id" in local_config:
-                        self.__client_id = local_config["client_id"]
-                    if "client_secret" in local_config:
-                        self.__client_secret = local_config["client_secret"]
-                    if "discovery_url" in local_config:
-                        self.__discovery_url = local_config["discovery_url"]
-                    if "verify_ssl_server" in local_config:
-                        self.__verify_ssl_server = local_config["verify_ssl_server"]
-                    if "dynamic_registration" in local_config:
-                        self.__dynamic_registration = local_config["dynamic_registration"]
-                    if "base_url" in local_config:
-                        self.__base_url = local_config["base_url"]
-                    if "app_name" in local_config:
-                        self.__app_name = local_config["app_name"]
-                    if "userinfo_endpoint" in local_config:
-                        self.__userinfo_endpoint = local_config["userinfo_endpoint"]
-                except JSONDecodeError as _:
-                    pass
+        self.__load_config_file()
+
+    def __load_config_file(self) -> None:
+        if not os.path.exists('config.json'):
+            return
+
+        with open('config.json') as fp:
+            try:
+                local_config = json.load(fp)
+                if "client_id" in local_config:
+                    self.__client_id = local_config["client_id"]
+                if "client_secret" in local_config:
+                    self.__client_secret = local_config["client_secret"]
+                if "discovery_url" in local_config:
+                    self.__discovery_url = local_config["discovery_url"]
+                if "verify_ssl_server" in local_config:
+                    self.__verify_ssl_server = local_config["verify_ssl_server"]
+                if "dynamic_registration" in local_config:
+                    self.__dynamic_registration = local_config["dynamic_registration"]
+                if "base_url" in local_config:
+                    self.__base_url = local_config["base_url"]
+                if "app_name" in local_config:
+                    self.__app_name = local_config["app_name"]
+                if "userinfo_endpoint" in local_config:
+                    self.__userinfo_endpoint = local_config["userinfo_endpoint"]
+            except JSONDecodeError as _:
+                pass
 
     def __get_discovered(self, attr: str) -> Union[str, None]:
         if self.discovered is not None and attr in self.discovered:
@@ -150,7 +155,7 @@ class Config(object):
 
     @staticmethod
     def get_scope() -> str:
-        return "openid email profile"
+        return "openid profile email"
 
     def get_token_endpoint(self) -> str:
         ret = self.__get_discovered("token_endpoint")
