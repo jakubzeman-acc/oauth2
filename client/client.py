@@ -1,38 +1,18 @@
 import json
-import random
-import string
-from ssl import create_default_context, SSLContext
-from _ssl import CERT_NONE
+from ssl import SSLContext
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from urllib.error import URLError
 from client.config import Config
 from typing import Union
+from client.db_interface import OAuth2Db
+from client.utils import get_ssl_context, generate_random_string
 
-
-def generate_random_string() -> str:
-    return ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(20))
-
-
-def get_ssl_context(config: Config) -> SSLContext:
-    ctx = create_default_context()
-
-    if not config.verify_ssl_server():
-        print('Not verifying ssl certificates')
-        ctx.check_hostname = False
-        ctx.verify_mode = CERT_NONE
-    return ctx
-
-
-def dict_key_to_camel_case(key: str) -> str:
-    if key.startswith("__"):
-        key = key[2:]
-    ret = ''.join(x for x in key.title() if "_" != x)
-    return ret[0].lower() + ret[1:]
 
 class Client:
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, db: OAuth2Db):
         self.config: Config = config
+        self.db: OAuth2Db = db
 
         print('Getting ssl context for oauth server')
         self.ctx: SSLContext = get_ssl_context(self.config)
@@ -64,7 +44,12 @@ class Client:
         if 0 == len(self.config.get_redirect_uri()):
             raise Exception('redirect_uri not set.')
 
-    def __dynamic_registration(self):
+    def __dynamic_registration(self) -> None:
+        db_dynamic_registration = self.db.get_dynamic_registration(self.config.get_app_name())
+        if db_dynamic_registration is not None:
+            self.config.set_dynamic_configuration(db_dynamic_registration)
+            return
+
         post_data = json.dumps({
             "application_type": "web",
             "redirect_uris": [self.config.get_base_url() + "/callback"],
@@ -90,6 +75,7 @@ class Client:
                 urlopen(request, context=self.ctx).read()
             )
         )
+        self.db.save_dynamic_registration(self.config.get_app_name(), self.config.get_dynamic_configuration())
 
     def revoke(self, token):
         """

@@ -105,7 +105,10 @@ def handle_invalid_http(error: HTTPError):
 def index():
     user = None
     if 'session_id' in session:
-        _, user = _db.get_session(session['session_id'])
+        user_session = _db.get_session(session['session_id'])
+        if isinstance(user_session, tuple):
+            user = user_session[1]
+
     if user is None:
         login_url = _client.get_authn_req_url(
             session,
@@ -170,7 +173,10 @@ def redirect_uri_handler():
         user_session.set_refresh_token(token_data['refresh_token'])
 
     user_info = _client.get_user_info(user_session.get_access_token())
-    user = User(email=user_info["email"], sub=user_info["sub"])
+    if "email" not in user_info:
+        user = User(email=None, sub=user_info["sub"])
+    else:
+        user = User(email=user_info["email"], sub=user_info["sub"])
     user_session.set_user_sub(user.get_sub())
     _db.save_session(user_session, user)
     session['session_id'] = user_session.get_id()
@@ -180,7 +186,7 @@ def redirect_uri_handler():
 if __name__ == '__main__':
     _db: OAuth2Db = OAuthSqlite()
     _config: Config = Config()
-    _client: Client = Client(_config)
+    _client: Client = Client(_config, _db)
     _jwt_validator = JwtValidator(_config)
 
     # Flask session secret key

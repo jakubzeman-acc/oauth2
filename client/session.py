@@ -1,6 +1,5 @@
-from client.client import generate_random_string
 from client.db_object import BaseDbObject
-from client.client import dict_key_to_camel_case
+from client.utils import dict_key_to_camel_case, generate_random_string
 
 
 class Session(BaseDbObject):

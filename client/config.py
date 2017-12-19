@@ -155,7 +155,7 @@ class Config(object):
 
     @staticmethod
     def get_scope() -> str:
-        return "openid profile email"
+        return "openid email profile"
 
     def get_token_endpoint(self) -> str:
         ret = self.__get_discovered("token_endpoint")

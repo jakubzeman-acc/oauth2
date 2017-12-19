@@ -1,5 +1,5 @@
 import json
-from client.client import dict_key_to_camel_case
+from client.utils import dict_key_to_camel_case
 
 
 class BaseDbObject(object):

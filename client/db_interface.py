@@ -16,3 +16,11 @@ class OAuth2Db(ABC):
     @abstractclassmethod
     def save_session(self, session: Session, user: User) -> None:
         pass
+
+    @abstractclassmethod
+    def get_dynamic_registration(self, client_name: str) -> Union[dict, None]:
+        pass
+
+    @abstractclassmethod
+    def save_dynamic_registration(self, client_name: str, configuration: dict) -> None:
+        pass
