@@ -16,4 +16,5 @@ env/
 __pycache__
 config.json
 config.google
+config.mojeid
 oauth2.db
