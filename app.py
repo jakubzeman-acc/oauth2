@@ -1,9 +1,14 @@
 # -*- coding: utf-8 -*-
-from flask import Flask, jsonify, redirect, session, request
+from flask import Flask, jsonify, redirect, session, request, render_template
 from client.client import Client, generate_random_string
 from client.config import Config
 from client.validator import JwtValidatorException, JwtValidator
 from jwkest import BadSignature
+from client.session import Session
+from client.user import User
+from client.db_interface import OAuth2Db
+from db_impl.sqlite import OAuthSqlite
+from urllib.error import HTTPError
 
 
 def generic_error_handler(error_object, status_code):
@@ -64,19 +69,6 @@ class InternalServerError(AppBaseException):
         AppBaseException.__init__(self, message, status_code, payload)
 
 
-class UserSession(object):
-    def __init__(self):
-        pass
-
-    access_token = None
-    refresh_token = None
-    id_token = None
-    access_token_json = None
-    id_token_json = None
-    name = None
-    api_response = None
-
-
 app = Flask(__name__)
 
 
@@ -96,15 +88,38 @@ def handle_invalid_jwt(error):
     response.status_code = 500
     return response
 
+@app.errorhandler(HTTPError)
+def handle_invalid_http(error: HTTPError):
+    resp_dict = {
+        "success": False,
+        "message": error.__class__.__name__ + ": " + str(error) if 0 == len(error.info()) else str(error.info()),
+        "detail": "" if 0 == len(error.msg) else error.msg,
+        "status_code": error.code
+    }
+    response = jsonify(resp_dict)
+    response.status_code = 500
+    return response
+
 
 @app.route('/', methods=['GET'])
 def index():
-    login_url = _client.get_authn_req_url(session, request.args.get("acr", None), request.args.get("forceAuthN", False))
-    return redirect(login_url)
+    user = None
+    if 'session_id' in session:
+        _, user = _db.get_session(session['session_id'])
+    if user is None:
+        login_url = _client.get_authn_req_url(
+            session,
+            request.args.get("acr", None),
+            request.args.get("forceAuthN", False)
+        )
+        return redirect(login_url)
+    else:
+        return render_template('index.html', username=user.get_email(), provider=_config.get_authorization_endpoint())
 
 
 @app.route('/callback', methods=['GET'])
 def redirect_uri_handler():
+    token_is_valid = False
     if 'state' not in session or session['state'] != request.args['state']:
         raise BadRequest('Missing or invalid state')
 
@@ -113,15 +128,24 @@ def redirect_uri_handler():
 
     try:
         token_data = _client.get_token(request.args['code'])
+        if "error" in token_data:
+            err_response = jsonify({
+                "success": False,
+                "message": token_data["error"],
+                "detail": "" if "error_description" not in token_data else token_data["error_description"],
+                "status_code": 500
+            })
+            err_response.status_code = 500
+            return err_response
     except Exception as e:
         raise BadRequest('Could not fetch token(s): ' + str(e))
     session.pop('state', None)
 
     # Store in basic server session, since flask session use cookie for storage
-    user = UserSession()
+    user_session = Session()
 
     if 'access_token' in token_data:
-        user.access_token = token_data['access_token']
+        user_session.set_access_token(token_data['access_token'])
 
     if _jwt_validator and 'id_token' in token_data:
         # validate JWS; signature, aud and iss.
@@ -131,28 +155,33 @@ def redirect_uri_handler():
 
         try:
             _jwt_validator.validate(token_data['id_token'], _config.get_issuer(), _config.get_client_id())
+            token_is_valid = True
         except BadSignature as bs:
             raise BadRequest('Could not validate token: ' + str(bs))
         except Exception as ve:
             raise BadRequest('Unexpected exception: ' + str(ve))
 
-        user.id_token = token_data['id_token']
+        user_session.set_id_token(token_data['id_token'])
+
+    if not token_is_valid:
+        raise BadRequest('Forbidden', status_code=403)
 
     if 'refresh_token' in token_data:
-        user.refresh_token = token_data['refresh_token']
+        user_session.set_refresh_token(token_data['refresh_token'])
 
-    session['session_id'] = generate_random_string()
-    _session_store[session['session_id']] = user
-
+    user_info = _client.get_user_info(user_session.get_access_token())
+    user = User(email=user_info["email"], sub=user_info["sub"])
+    user_session.set_user_sub(user.get_sub())
+    _db.save_session(user_session, user)
+    session['session_id'] = user_session.get_id()
     return redirect('/')
 
 
 if __name__ == '__main__':
-    _config = Config()
-    _client = Client(_config)
+    _db: OAuth2Db = OAuthSqlite()
+    _config: Config = Config()
+    _client: Client = Client(_config)
     _jwt_validator = JwtValidator(_config)
-    # create a session store TODO: implement in some DB
-    _session_store = {}
 
     # Flask session secret key
     app.secret_key = generate_random_string()

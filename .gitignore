@@ -15,3 +15,4 @@ app/bootstrap.css.map
 env/
 __pycache__
 config.json
+oauth2.db
