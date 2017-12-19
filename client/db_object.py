@@ -6,6 +6,9 @@ class BaseDbObject(object):
     def to_dict(self) -> dict:
         ret = {}
         for key, value in self.__dict__.items():
+            pos = str(key).find("__")
+            if 0 < pos:
+                key = str(key)[pos:]
             if str(key).startswith("__") and not str(key).endswith("_") and value is not None:
                 if isinstance(value, dict):
                     for par_key, par_value in value.items():

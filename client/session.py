@@ -13,10 +13,16 @@ class Session(BaseDbObject):
         if session_detail is None:
             self.__id: str = generate_random_string()
         else:
-            self.__access_token = session_detail[dict_key_to_camel_case("__access_token")]
-            self.__refresh_token = session_detail[dict_key_to_camel_case("__refresh_token")]
-            self.__id_token = session_detail[dict_key_to_camel_case("__id_token")]
-            self.__user_sub = session_detail[dict_key_to_camel_case("__user_sub")]
+            if dict_key_to_camel_case("__id") in session_detail:
+                self.__id: str = session_detail[dict_key_to_camel_case("__id")]
+            if dict_key_to_camel_case("__access_token") in session_detail:
+                self.__access_token = session_detail[dict_key_to_camel_case("__access_token")]
+            if dict_key_to_camel_case("__refresh_token") in session_detail:
+                self.__refresh_token = session_detail[dict_key_to_camel_case("__refresh_token")]
+            if dict_key_to_camel_case("__id_token") in session_detail:
+                self.__id_token = session_detail[dict_key_to_camel_case("__id_token")]
+            if dict_key_to_camel_case("__user_sub") in session_detail:
+                self.__user_sub = session_detail[dict_key_to_camel_case("__user_sub")]
 
     def set_access_token(self, access_token: str) -> None:
         self.__access_token = access_token
