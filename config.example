@@ -4,5 +4,5 @@
   "dynamic_registration": false,
   "client_id": "ID of application",
   "client_secret": "Application secret",
-  "discovery_url": "https://mojeid.cz/.well-known/openid-configuration/"
+  "discovery_url": "for example mojeid.cz https://mojeid.cz/.well-known/openid-configuration/ or google's https://accounts.google.com/.well-known/openid-configuration"
 }
