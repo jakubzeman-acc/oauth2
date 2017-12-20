@@ -1,25 +1,9 @@
-##########################################################################
-# Copyright 2016 Curity AB
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-# http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-##########################################################################
-
 import json
 import base64
 from urllib.request import Request, urlopen
-from jwkest import BadSignature
-from jwkest.jwk import KEYS
-from jwkest.jws import JWS
+from jose import jws
+from jose.constants import ALGORITHMS
+from jose.exceptions import JWSError
 from client.client import get_ssl_context
 from client.config import Config
 
@@ -40,13 +24,12 @@ class JwtValidator:
         self.ctx = get_ssl_context(config)
 
         self.jwks_uri = config.get_jwks_uri()
-        self.jwks = self.load_keys()
+        self.jwks = self.get_jwks_data()
 
     def validate(self, jwt, iss, aud):
         parts = jwt.split('.')
         if len(parts) != 3:
-            raise BadSignature('Invalid JWT. Only JWS supported.')
-        header = json.loads(base64_urldecode(parts[0]))
+            raise JwtValidatorException('Invalid JWT. Only JWS supported.')
         payload = json.loads(base64_urldecode(parts[1]))
 
         if iss != payload['iss']:
@@ -56,13 +39,12 @@ class JwtValidator:
             if (isinstance(payload["aud"], str) and payload["aud"] != aud) or aud not in payload['aud']:
                 raise JwtValidatorException("Invalid audience %s, expected %s" % (payload['aud'], aud))
 
-        jws = JWS(alg=header['alg'])
-        # Raises exception when signature is invalid
         try:
-            jws.verify_compact(jwt, self.jwks)
-        except Exception as e:
+            jws.verify(jwt, self.jwks, ALGORITHMS.ALL)
+        except JWSError as e:
             print("Exception validating signature")
             raise JwtValidatorException(e)
+
         print("Successfully validated signature.")
 
     def get_jwks_data(self):
@@ -76,9 +58,3 @@ class JwtValidator:
             print("Error fetching JWKS", e)
             raise e
         return jwks_response.read()
-
-    def load_keys(self):
-        # load the jwk set.
-        jwks = KEYS()
-        jwks.load_jwks(self.get_jwks_data())
-        return jwks

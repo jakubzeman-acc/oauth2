@@ -3,7 +3,6 @@ from flask import Flask, jsonify, redirect, session, request, render_template
 from client.client import Client, generate_random_string
 from client.config import Config
 from client.validator import JwtValidatorException, JwtValidator
-from jwkest import BadSignature
 from client.session import Session
 from client.user import User
 from client.db_interface import OAuth2Db
@@ -159,7 +158,7 @@ def redirect_uri_handler():
         try:
             _jwt_validator.validate(token_data['id_token'], _config.get_issuer(), _config.get_client_id())
             token_is_valid = True
-        except BadSignature as bs:
+        except JwtValidatorException as bs:
             raise BadRequest('Could not validate token: ' + str(bs))
         except Exception as ve:
             raise BadRequest('Unexpected exception: ' + str(ve))
